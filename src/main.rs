@@ -1,6 +1,7 @@
 extern crate libdns;
 
 use libdns::message::{Header, Question, QuestionBuilder, Message};
+use libdns::rr::{Rdata};
 use libdns::wire::{FromWire, ToWire};
 
 use std::env;
@@ -8,6 +9,7 @@ use std::fs::File;
 use std::io::{Error, Result, Read};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket};
 use std::str::FromStr;
+use std::time;
 
 #[cfg(target_os = "redox")]
 fn get_local_socket() -> Result<SocketAddrV4> {
@@ -28,6 +30,12 @@ fn get_local_socket() -> Result<SocketAddrV4> {
     Ok(SocketAddrV4::new(local_ip, 0))
 }
 
+fn get_tid() -> u16 {
+    let time = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap();
+    let tid = (time.subsec_nanos() >> 16) as u16;
+    tid
+}
+
 
 fn main() {
     let args = env::args();
@@ -36,8 +44,8 @@ fn main() {
     let server = args.next().expect("No server was provided.");
 
     // Create a message
-    let header = Header {
-        id: 1236,
+    let mut header = Header {
+        id: get_tid(),
         response: false,
         opcode: 0,
         aa: false,
@@ -54,7 +62,7 @@ fn main() {
 
     let question = QuestionBuilder::default().set_name(name.to_string()).finish();
 
-    let query = Message {
+    let mut query = Message {
         header: header,
         question: vec![question],
         answer: vec![],
@@ -77,15 +85,40 @@ fn main() {
     let server = SocketAddrV4::new(Ipv4Addr::new(dns[0], dns[1], dns[2], dns[3]), 53);
 
     socket.connect(&SocketAddr::V4(server)).expect("Cannot connect to the server");
-    socket.send(&query.to_wire()).expect("Cannot send the query");
+    let mut prev_name = String::from("");
+    let mut response;
+    loop {
+        socket.send(&query.to_wire()).expect("Cannot send the query");
 
-    // Read a response
-    let mut buffer = [0u8;65536];
-    let _  = socket.recv(&mut buffer).expect("Cannot read from the socket");
-    // let (length,_) = socket.recv_from(&mut buffer).expect("Cannot read from the socket");
+        // Read a response
+        let mut buffer = vec![0u8; 65536];
+        let _ = socket.recv(&mut buffer).expect("Cannot read from the socket");
+        // let (length,_) = socket.recv_from(&mut buffer).expect("Cannot read from the socket");
+        #[cfg(target_os = "redox")]
+        println!("#dbg: {:?}", &buffer[0..100]);
 
-    let response: Message = Message::from_wire(&buffer).unwrap();
-    println!("Address of {} is {:?}", name, response.answer[0].rdata);
+        response = Message::from_wire(&buffer).unwrap();
+
+        if let &Rdata::CName(ref s) = &response.answer[0].rdata {
+            println!("{} is cname for {}", name, s);
+            let question = QuestionBuilder::default().set_name(s.to_owned()).finish();
+            if &prev_name == s {
+                break;
+            }
+            prev_name = s.to_owned();
+            query.question = vec![question];
+            query.header.id += get_tid();
+        } else {
+            break;
+        }
+    }
+
+    if let Rdata::A(addr) = response.answer[0].rdata {
+        println!("Address of {} is {}", name, addr);
+    } else {
+        println!("I've got sth else than A record.");
+    }
+
 
 }
 
