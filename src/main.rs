@@ -1,8 +1,8 @@
-extern crate libdns;
+extern crate libresolv;
 
-use libdns::message::{Header, Question, QuestionBuilder, Message};
-use libdns::rr::{Rdata};
-use libdns::wire::{FromWire, ToWire};
+use libresolv::message::{Header, Question, QuestionBuilder, Message};
+use libresolv::rr::{Rdata};
+use libresolv::wire::{FromWire, ToWire};
 
 use std::env;
 use std::fs::File;
@@ -97,7 +97,8 @@ fn main() {
         #[cfg(target_os = "redox")]
         println!("#dbg: {:?}", &buffer[0..100]);
 
-        response = Message::from_wire(&buffer).unwrap();
+        let (_, r) = Message::from_wire(&buffer).unwrap();
+        response = r;
 
         if let &Rdata::CName(ref s) = &response.answer[0].rdata {
             println!("{} is cname for {}", name, s);
@@ -107,7 +108,7 @@ fn main() {
             }
             prev_name = s.to_owned();
             query.question = vec![question];
-            query.header.id += get_tid();
+            query.header.id = get_tid();
         } else {
             break;
         }

@@ -2,11 +2,11 @@
 name = "host"
 version = "0.1.0"
 dependencies = [
- "libdns 0.1.0",
+ "libresolv 0.1.0",
 ]
 
 [[package]]
-name = "libdns"
+name = "libresolv"
 version = "0.1.0"
 dependencies = [
  "nom 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",

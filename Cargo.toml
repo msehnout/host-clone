@@ -4,4 +4,4 @@ version = "0.1.0"
 authors = ["Sehny <todo@no-email-yet.com>"]
 
 [dependencies]
-libdns = { path = "../libdns" }
+libresolv = { path = "../libresolv" }
